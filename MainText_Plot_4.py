@@ -12,7 +12,7 @@ Plot 4 - Cultivar segmentation and its benefits to maize production
          4b. the best segmentation scenario
          4c. which country has the highest benefits from market segmentation
 """
-import matplotlib
+import matplotlib as mpl
 import pandas as pd
 import numpy as np
 from scipy.signal import find_peaks
@@ -32,6 +32,16 @@ import matplotlib.colors as mcolors
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.neighbors import kneighbors_graph
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+PLOTS_DIR = SCRIPT_DIR.parent / "Plots"
+INPUT_DIR = Path(r"E:\RSG Dropbox\Wei Xiong\Works\CurrentProcessing\0_AfricaMaizeSorghum\Data")  #SCRIPT_DIR.parent / "data"
+RESULTS_ROOT = Path(r"D:\Works\AfricaMzSg\results")   #SCRIPT_DIR.parent / "results"
+SIMOUT_DIR = Path(r"D:\Works\AfricaMzSg\simout") #SCRIPT_DIR.parent / "simout"
+
+BOUNDARY_DIR = Path(r"E:\RSG Dropbox\Wei Xiong\Works\CurrentProcessing\0_AfricanMaizeSorghum\Plots")
+BOUNDARY_FILE = BOUNDARY_DIR / "CountryBoundaryLines" / "ne_110m_admin_0_countries.shp"
 
 """
 Step 1 - Estimate production benefits for different number of market
@@ -80,12 +90,12 @@ def IdentifyCulGroup(group):
 
 def ProdBenefitsWithSegPara(crop,fer,G1):
     #production with reported month
-    in_dir="D:/works/AfricaMzSg/results/"+crop+"/"+fer+"/"
-    yld=pd.read_csv("D:/works/AfricaMzSg/simout/EPIC_mz_result_20crv3_obs_"+fer+".csv") 
-    grid=pd.read_csv("D:/works/AfricaMzSg/input/African5minGrid_SIMUNIT.csv")[['SIMUNIT','POINT_X','POINT_Y']]
+    in_dir = RESULTS_ROOT / crop / fer
+    yld=pd.read_csv(SIMOUT_DIR / f"EPIC_mz_result_20crv3_obs_{fer}.csv") 
+    grid=pd.read_csv(INPUT_DIR / "African5minGrid_SIMUNIT.csv")[['SIMUNIT','POINT_X','POINT_Y']]
     grid.columns=['SIMUNIT','x','y'] 
-    area=pd.read_csv("D:/works/AfricaMzSg/input/Africa_SIMUNIT_MZ_PhysicalArea.csv")  #area
-    reportedsow=pd.read_csv("D:/works/AfricaMzSg/input/Africa_SimGrid_Confirmed_5min_4calibration.csv")[['SIMUNIT','ReportedSow_se1m','ReportedSow_se2m']]
+    area=pd.read_csv(INPUT_DIR / "Africa_SIMUNIT_MZ_PhysicalArea.csv")  #area
+    reportedsow=pd.read_csv(INPUT_DIR / "Africa_SimGrid_Confirmed_5min_4calibration.csv")[['SIMUNIT','ReportedSow_se1m','ReportedSow_se2m']]
     reportedsow=reportedsow.merge(area,how='left')
     reportedsow.columns=['SIMUNIT','s1m','s2m','PhysicalArea']
     #remove season 2 sowing month if it overlaps with the season 1, the difference of the two months is less than 4.
@@ -93,7 +103,7 @@ def ProdBenefitsWithSegPara(crop,fer,G1):
     result=pd.DataFrame(columns=['season','nneigh','nseg','prod_mean','prod_cv'])
     for se in [1,2]:
         #se=1
-        df = pd.read_csv(in_dir+crop+"_se"+str(se)+"_"+fer+"_dis_withmon"+G1+".csv")
+        df = pd.read_csv(in_dir / f"{crop}_se{se}_{fer}_dis_withmon{G1}.csv")
         df.columns=['x','y','c','m']
         #only keep the simunits with simulated values
         temp1=df.merge(grid,how='inner',on=['x','y'])[['SIMUNIT','c','m']]
@@ -113,7 +123,7 @@ def ProdBenefitsWithSegPara(crop,fer,G1):
             for nseg in range(1,100):
                 df1=clustering(df,nneigh,nseg)
                 #compute production for each segmentation strategy
-                temp=pd.read_csv("D:\\works\\AfricaMzSg\\input\\African5minGrid_SIMUNIT.csv")[['SIMUNIT','POINT_X','POINT_Y']]
+                temp=pd.read_csv(INPUT_DIR / "African5minGrid_SIMUNIT.csv")[['SIMUNIT','POINT_X','POINT_Y']]
                 temp.columns=['SIMUNIT','x','y'] 
                 df1=df1.merge(temp,how='left')[['SIMUNIT','c','m','seg']]  #add SIMUNIT
                 df1=df1.groupby(['SIMUNIT']).agg(mode).reset_index()
@@ -125,7 +135,7 @@ def ProdBenefitsWithSegPara(crop,fer,G1):
                 df1=pd.DataFrame([[temp.iloc[i,1][j] for j in range(len(temp.iloc[i,1]))] for i in temp.index]).fillna(0)  #conver the dataframe
                 prod=np.dot(df1.iloc[:,51].T,df1.iloc[:,:51])
                 result.loc[len(result),]=[se,nneigh,nseg]+[prod.mean(),prod.std()*100/prod.mean()]
-    result.to_csv(in_dir+"nmarket_temp_sea1.csv",index=False)
+    result.to_csv(in_dir / "nmarket_temp_sea1.csv",index=False)
 
 
 
@@ -170,9 +180,9 @@ def csv2tif(csvinput,outtif,lon_col='x',lat_col='y',value_col='value'):
 #season 1 neib=18, nmarket=25, season 2 neib=16, nmarket=5
 def Seg2tiff(crop,fer,G1):
     para=[[18,25],[16,5]]  #34 market for season 1, and 8 market for season 2
-    in_dir="D:/works/AfricaMzSg/results/"+crop+"/"+fer+"/"
+    in_dir = RESULTS_ROOT / crop / fer
     for se in [1,2]:
-        df = pd.read_csv(in_dir+crop+"_se"+str(se)+"_"+fer+"_dis_withmon"+G1+".csv") 
+        df = pd.read_csv(in_dir / f"{crop}_se{se}_{fer}_dis_withmon{G1}.csv") 
         df.columns=['x','y','c','m']
         # 假设列: lon, lat, variety, month
         # 2. 特征预处理
@@ -199,24 +209,24 @@ def Seg2tiff(crop,fer,G1):
         df=df[['x','y','seg']].merge(temp,how='left')
         for cul in df.c.unique():
             temp=df.loc[df['c']==cul,]
-            csv2tif(temp,in_dir+"crop_se"+str(se)+"_cul"+str(cul)+"_"+fer+"_dommon.tiff",lon_col='x',lat_col='y',value_col='m')
+            csv2tif(temp,in_dir / f"{crop}_se{se}_cul{cul}_{fer}_dommon.tiff",lon_col='x',lat_col='y',value_col='m')
 
 #Step 3 - Estimate Production Benefits for Countries
 def EstimateCountryBenefits(crop,fer,G1):
-    in_dir="D:/works/AfricaMzSg/results/"+crop+"/"+fer+"/"
+    in_dir = RESULTS_ROOT / crop / fer
     para=[[18,25],[16,5]]  #One of the optimum segmentation strategy
-    grid=pd.read_csv("D:\\works\\AfricaMzSg\\input\\African5minGrid_SIMUNIT.csv")[['SIMUNIT','POINT_X','POINT_Y']]
+    grid=pd.read_csv(INPUT_DIR / "African5minGrid_SIMUNIT.csv")[['SIMUNIT','POINT_X','POINT_Y']]
     grid.columns=['SIMUNIT','x','y']
     grid['x']=grid['x'].round(2)
     grid['y']=grid['y'].round(2)
-    reportedsow=pd.read_csv("D:\\works\\AfricaMzSg\\input\\Africa_SimGrid_Confirmed_5min_4calibration.csv")[['SIMUNIT','ReportedSow_se1m','ReportedSow_se2m','country','A']]
+    reportedsow=pd.read_csv(INPUT_DIR / "Africa_SimGrid_Confirmed_5min_4calibration.csv")[['SIMUNIT','ReportedSow_se1m','ReportedSow_se2m','country','A']]
     reportedsow.columns=['SIMUNIT','s1m','s2m','country','A']
     #remove season 2 sowing month if it overlaps with the season 1, the difference of the two months is less than 4.
     reportedsow.loc[(reportedsow.s1m-reportedsow.s2m)%12<4,'s2m']=np.nan
-    yld=pd.read_csv("D:\\works\\AfricaMzSg\\simout\\EPIC_mz_result_20crv3_obs_"+fer+".csv")
+    yld=pd.read_csv(SIMOUT_DIR / f"EPIC_mz_result_20crv3_obs_{fer}.csv")
     result=pd.DataFrame(columns=['season','country','nmarket','w_wo_cluster']+['year_'+str(y) for y in range(1971,2022)]) #output results
     for se in [1,2,3]:  #2 is the second season but with only current reported potential area,3 is the second month with all potential areas
-        df = pd.read_csv(in_dir+crop+"_se"+str(se//2+1)+"_"+fer+"_dis_withmon"+G1+".csv")
+        df = pd.read_csv(in_dir / f"{crop}_se{se//2+1}_{fer}_dis_withmon{G1}.csv")
         df.columns=['x','y','c','m']
         #only keep the simunits with simulated values
         temp1=df.merge(grid,how='inner',on=['x','y'])[['SIMUNIT','c','m']]
@@ -265,7 +275,7 @@ def EstimateCountryBenefits(crop,fer,G1):
                 temp=pd.DataFrame([[temp.iloc[i,1][j] for j in range(len(temp.iloc[i,1]))] for i in temp.index]).fillna(0)
                 temp=np.dot(temp.iloc[:,51].T,temp.iloc[:,:51])  #estimate production
                 result.loc[len(result),]=[se,coun,seg,'wcluster']+temp.tolist()
-    result.to_csv(in_dir+crop+"_CountryProdBenefitByClustering_"+fer+G1+".csv", index=False)
+    result.to_csv(in_dir / f"{crop}_CountryProdBenefitByClustering_{fer}{G1}.csv", index=False)
 
 #Step 4 - Plotting
 def MainText_Plot_4(crop,fer,G1):
@@ -273,10 +283,9 @@ def MainText_Plot_4(crop,fer,G1):
     cmap1 = plt.cm.tab20
     colors=cmap1.colors
     market=[25,5]
-    africa=gpd.read_file("E:/RSG Dropbox/Wei Xiong/Works/CurrentProcessing/0_AfricanMaizeSorghum/Plots/CountryBoundaryLines/ne_110m_admin_0_countries.shp")
+    africa=gpd.read_file(BOUNDARY_FILE)
     africa=africa[africa['CONTINENT']=='Africa']
-    fig_dir="E:/RSG Dropbox/Wei Xiong/Works/CurrentProcessing/0_AfricanMaizeSorghum/NF_NATFOOD-20501074/R1/Plots/"
-    in_dir="D:/works/AfricaMzSg/results/"+crop+"/"+fer+"/"
+    in_dir = RESULTS_ROOT / crop / fer
     fig = plt.figure(figsize=(18,15))  #,height_ratios=[2,1]
     gs=fig.add_gridspec(2,2,height_ratios=[2,1.2])
     #Benefits maps at the bottom
@@ -288,7 +297,7 @@ def MainText_Plot_4(crop,fer,G1):
         africa.boundary.plot(ax=ax_top,linewidth=0.5,color='black')
         #read data
         for c in [-1,0,1]:
-            tif=in_dir+crop+"_se"+str(se+1)+"_cul"+str(c)+"_"+fer+"_dommon.tiff"
+            tif=in_dir / f"{crop}_se{se+1}_cul{c}_{fer}_dommon.tiff"
             if os.path.exists(tif):
                 with rasterio.open(tif) as src:
                     data = src.read(1)  # 读取第一个波段数据
@@ -300,8 +309,8 @@ def MainText_Plot_4(crop,fer,G1):
         ax_top.set_ylim([-34.5,37.5])
         ax_top.set_xlabel("Longitude", fontsize=18)
         ax_top.set_ylabel("Latitude", fontsize=18)
-        ax_top.set_xticks([-10,0,10,20,30,40,50],['$10^\circ$W','$0^\circ$','$10^\circ$E','$20^\circ$E','$30^\circ$','$40^\circ$E','$50^\circ$E'],fontsize=14)
-        ax_top.set_yticks([-30,-20,-10,0,10,20,30],['$30^\circ$S','$20^\circ$S','$10^\circ$S','$0^\circ$','$10^\circ$N','$20^\circ$N','$30^\circ$N'],fontsize=14)
+        ax_top.set_xticks([-10,0,10,20,30,40,50],[r'$10^\circ$W',r'$0^\circ$',r'$10^\circ$E',r'$20^\circ$E',r'$30^\circ$',r'$40^\circ$E',r'$50^\circ$E'],fontsize=14)
+        ax_top.set_yticks([-30,-20,-10,0,10,20,30],[r'$30^\circ$S',r'$20^\circ$S',r'$10^\circ$S',r'$0^\circ$',r'$10^\circ$N',r'$20^\circ$N',r'$30^\circ$N'],fontsize=14)
         ax_top.text(-28,41,chr(97+se),fontsize=26)
         ax_top.text(-16,-33, "Number of markets: "+ str(market[se])+"\n",style='italic',fontsize=15) 
     ########################################Country production benefits############################################
@@ -309,7 +318,7 @@ def MainText_Plot_4(crop,fer,G1):
     bar_width = 0.61
     bar_location=[0.1,0.965]
     tree_location=[[0.161,0.11,0.290,0.23],[0.574,0.11,0.290,0.172]]
-    seg=pd.read_csv(in_dir+"mz_CountryProdBenefitByClustering_"+fer+G1+".csv")
+    seg=pd.read_csv(in_dir / f"mz_CountryProdBenefitByClustering_{fer}{G1}.csv")
     for se in [1,3]:
         df=seg.groupby(['season','w_wo_cluster'])[seg.columns[4:]].sum().reset_index()
         x=df.loc[(df.season==se)&(df.w_wo_cluster=='wcluster'),df.columns[2:]].values-df.loc[(df.season==se)&(df.w_wo_cluster=='wocluster'),df.columns[2:]].values
@@ -330,13 +339,14 @@ def MainText_Plot_4(crop,fer,G1):
         data.loc[data['country']=='United Republic of Tanzania','country']='Tanzania'
         data.loc[data['country']=='Democratic Republic of the Congo','country']='DRC'
         if se==1:
-            data['benefit%']=data['benefit%'].round(0).astype('int')
-            data.loc[data['benefit%']>200,'benefit%']=">200"
+            data['benefit%']=data['benefit%'].round(0).astype(int)
+            data.loc[data['benefit%']>200,'benefit%']=200
+            data['benefit%']=data['benefit%'].astype('str')
+            data.loc[data['benefit%']=="200",'benefit%']=">200"
         data['nmarket']=data['nmarket'].round(0).astype('int')
         nmarket=nmarket+data['nmarket'].tolist()
         se_ax=fig.add_axes(tree_location[se//2])
-        labels=data['country']+"\n"+data['benefit'].round(1).astype('str')+ \
-        "MT("+data['benefit%'].astype('str')+"%)"
+        labels=data['country']+"\n"+data['benefit'].round(1).astype('str')+"MT("+data['benefit%'].astype('str')+"%)"
         if se==3:
             labels=data['country']+"\n"+data['benefit'].round(1).astype('str')+"MT"
         squarify.plot(sizes=data['benefit'],alpha=0.7,label=labels,color=[colors[n] for n in data['nmarket']],
@@ -376,12 +386,15 @@ def MainText_Plot_4(crop,fer,G1):
     cbar.set_ticks([0.5+x for x in range(len(nmarket))])
     cbar.set_ticklabels([f'{i}' for i in nmarket])
     cbar.set_label("Number of markets",fontsize=14,rotation=270,labelpad=25)
-    fig.savefig(fig_dir + "MainText_Fig_4.png", format="png", dpi=300, bbox_inches='tight', pad_inches=0)
+    fig.savefig(PLOTS_DIR / "MainText_Fig_4.png", format="png", dpi=300, bbox_inches='tight', pad_inches=0)
+    fig.savefig(PLOTS_DIR / "MainText_Fig_4.pdf", format="pdf", dpi=300, bbox_inches='tight', pad_inches=0)
 
-crop="mz"
-fer="wfer_gridcalibratedWaHi"
-G1="_GT1"
-#ProdBenefitsWithSegPara(crop,fer,G1) #Step 1
-#Seg2tiff(crop,fer,G1)  #Step 2
-#EstimateCountryBenefits(crop,fer,G1) #Step 3
-MainText_Plot_4(crop,fer,G1)  #Step 4
+
+if __name__ == "__main__":
+    crop = "mz"
+    fer = "wfer_gridcalibratedWaHi"
+    G1 = "_GT1"
+    # ProdBenefitsWithSegPara(crop, fer, G1)  # Step 1
+    # Seg2tiff(crop, fer, G1)  # Step 2
+    # EstimateCountryBenefits(crop, fer, G1)  # Step 3
+    MainText_Plot_4(crop, fer, G1)  # Step 4

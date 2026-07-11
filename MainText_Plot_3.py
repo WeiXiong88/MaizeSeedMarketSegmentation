@@ -17,7 +17,15 @@ import rasterio
 from rasterio.transform import from_origin
 import itertools
 import statsmodels.api as sm
+from pathlib import Path
 #%matplotlib inline
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+PLOTS_DIR = SCRIPT_DIR.parent / "Plots"
+INPUT_DIR = Path(r"E:\RSG Dropbox\Wei Xiong\Works\CurrentProcessing\0_AfricanMaizeSorghum\Data")#SCRIPT_DIR.parent / "data"
+RESULTS_ROOT = Path(r"D:\Works\AfricaMzSg\results") #SCRIPT_DIR.parent / "results"
+BOUNDARY_DIR = Path(r"E:\RSG Dropbox\Wei Xiong\Works\CurrentProcessing\0_AfricanMaizeSorghum\Plots")
+BOUNDARY_FILE = BOUNDARY_DIR / "CountryBoundaryLines" / "ne_110m_admin_0_countries.shp"
 
 def csv2tif(csvinput,outtif,lon_col='x',lat_col='y',value_col='value'):
     """
@@ -58,9 +66,10 @@ def csv2tif(csvinput,outtif,lon_col='x',lat_col='y',value_col='value'):
             
 def varDis2tif(crop,fer,G1):
     #Convert cultivar maturity distribution (mean) to tif files
-    data=pd.read_csv("D:/works/AfricaMzSg/input/African5minGrid_SIMUNIT.csv")
+    result_dir = RESULTS_ROOT / crop / fer
+    data=pd.read_csv(INPUT_DIR / "African5minGrid_SIMUNIT.csv")
     #df<-read.csv(gridfile,header=T)
-    infile="D:/works/AfricaMzSg/results/"+crop+"/"+fer+"/"+crop+"_culseg_"+fer+"_1971-2021"+G1+".csv"  #Change for file
+    infile=result_dir / f"{crop}_culseg_{fer}_1971-2021{G1}.csv"  #Change for file
     temp=pd.read_csv(infile)
     #remove the minor season if the two growth periods overlap on either way
     temp.loc[(temp['sea1_dominantmon']+4+temp['sea1_matugroup'])%12>temp['sea2_dominantmon'],'sea2_nGT1']=0
@@ -74,24 +83,24 @@ def varDis2tif(crop,fer,G1):
     for se in ['1','2']: #sea1 and sea2
         df=data[data['s'+se+'GT1']>=(0.8*51)][['x','y','s'+se+'c','s'+se+'m']].dropna()
         #df=data[['x','y','s'+se+'c','s'+se+'m']].dropna()
-        df.to_csv("D:/works/AfricaMzSg/results/"+crop+"/"+fer+"/"+crop+"_se"+se+"_"+fer+"_dis_withmon"+G1+".csv",index=False)
+        df.to_csv(result_dir / f"{crop}_se{se}_{fer}_dis_withmon{G1}.csv",index=False)
         df=df[['x','y','s'+se+'c']]
         df.columns=['x','y','value']
-        df.to_csv("D:/works/AfricaMzSg/results/"+crop+"/"+fer+"/"+crop+"_se"+se+"_"+fer+"_dis"+G1+".csv",index=False)
-        csv2tif(df,"D:/works/AfricaMzSg/results/"+crop+"/"+fer+"/"+crop+"_se"+se+"_"+fer+"_dis"+G1+".tiff")
+        df.to_csv(result_dir / f"{crop}_se{se}_{fer}_dis{G1}.csv",index=False)
+        csv2tif(df,result_dir / f"{crop}_se{se}_{fer}_dis{G1}.tiff")
     
 def EstimateTemporalChange(crop,fer,G1):
     #Estimate the temporal change of cultivar maturity group across all grids. 
     period=['1971-1980','1981-1990','1991-2000','2001-2010','2011-2021']
     i=0
-    in_dir="D:/works/AfricaMzSg/results/"+crop+"/"+fer+"/"
-    df=pd.read_csv(in_dir+crop+"_culseg_"+fer+"_"+period[i]+G1+".csv")
+    in_dir=RESULTS_ROOT / crop / fer
+    df=pd.read_csv(in_dir / f"{crop}_culseg_{fer}_{period[i]}{G1}.csv")
     df.loc[df['sea1_nGT1']<8,'sea1_matugroup']=np.nan
     df.loc[df['sea2_nGT1']<8,'sea2_matugroup']=np.nan
     df=df[['SIMUNIT','sea1_matugroup','sea1_dominantmon','sea2_matugroup','sea2_dominantmon']]
     df.columns=["SIMUNIT"]+["se1c_"+str(i),"se1m_"+str(i),"se2c_"+str(i),"se2m_"+str(i)]
     for i in range(1,5):
-        temp=pd.read_csv(in_dir+crop+"_culseg_"+fer+"_"+period[i]+G1+".csv")
+        temp=pd.read_csv(in_dir / f"{crop}_culseg_{fer}_{period[i]}{G1}.csv")
         temp.loc[temp['sea1_nGT1']<8,'sea1_matugroup']=np.nan
         temp.loc[temp['sea2_nGT1']<8,'sea2_matugroup']=np.nan
         temp=temp[['SIMUNIT','sea1_matugroup','sea1_dominantmon','sea2_matugroup','sea2_dominantmon']]
@@ -114,7 +123,7 @@ def EstimateTemporalChange(crop,fer,G1):
         df['slope_'+str(se)]=slope
         df['intercept_'+str(se)]=intercept
         df['pvalue_'+str(se)]=pvalue
-    df.to_csv("D:/works/AfricaMzSg/results/"+crop+"/"+fer+"/"+crop+"_culseg_"+fer+"_cul_temporalChange"+G1+".csv",index=False)
+    df.to_csv(in_dir / f"{crop}_culseg_{fer}_cul_temporalChange{G1}.csv",index=False)
 
 #Convert cultivar maturity migraation to tif files 
 #Get the information where has migration and latitude and longitude
@@ -136,11 +145,12 @@ def create_new_column(row):
             return 0
         
 def temporalChange2tif(crop,fer,G1):
-    temp=pd.read_csv("D:/works/AfricaMzSg/results/"+crop+"/"+fer+"/"+crop+"_culseg_"+fer+"_cul_temporalChange"+G1+".csv")[['SIMUNIT','slope_1','pvalue_1','slope_2','pvalue_2']]
+    result_dir = RESULTS_ROOT / crop / fer
+    temp=pd.read_csv(result_dir / f"{crop}_culseg_{fer}_cul_temporalChange{G1}.csv")[['SIMUNIT','slope_1','pvalue_1','slope_2','pvalue_2']]
     temp['se1'] = temp[['slope_1','pvalue_1']].apply(create_new_column, axis=1)
     temp['se2'] = temp[['slope_2','pvalue_2']].apply(create_new_column, axis=1)
     temp=temp[['SIMUNIT','se1','se2']]
-    df=pd.read_csv("D:\\works\\AfricaMzSg\\input\\African5minGrid_SIMUNIT.csv")
+    df=pd.read_csv(INPUT_DIR / "African5minGrid_SIMUNIT.csv")
     df=df[['SIMUNIT','POINT_X','POINT_Y','A']]
     df.columns=['SIMUNIT','x','y','A']
     df=df.merge(temp)
@@ -150,24 +160,23 @@ def temporalChange2tif(crop,fer,G1):
         temp.columns=['x','y','value']
         temp=temp.dropna()
         #keep it has the same domain as the distribution map
-        yld=pd.read_csv("D:/works/AfricaMzSg/results/"+crop+"/"+fer+"/"+crop+"_"+se+"_"+fer+"_dis"+G1+".csv")[['x','y']]
+        yld=pd.read_csv(result_dir / f"{crop}_{se}_{fer}_dis{G1}.csv")[['x','y']]
         temp=yld.merge(temp,how='left').fillna(0)
-        temp.to_csv("D:/works/AfricaMzSg/results/"+crop+"/"+fer+"/"+crop+"_"+se+"_"+fer+"_change"+G1+".csv",index=False)
-        csv2tif(temp,"D:/works/AfricaMzSg/results/"+crop+"/"+fer+"/"+crop+"_"+se+"_"+fer+"_change"+G1+".tiff")
+        temp.to_csv(result_dir / f"{crop}_{se}_{fer}_change{G1}.csv",index=False)
+        csv2tif(temp,result_dir / f"{crop}_{se}_{fer}_change{G1}.tiff")
 
 def MainText_Plot_3(crop,fer,G1):
     """
     Plotting
     """
-    in_dir="D:\\works\\AfricaMzSg\\results\\"+crop+"\\"+fer+"\\"
-    tif_dir="D:\\works\\AfricaMzSg\\results\\"+crop+"\\"+fer+"\\"
-    fig_dir="E:\\RSG Dropbox\\Wei Xiong\\Works\\CurrentProcessing\\0_AfricanMaizeSorghum\\Plots\\"
+    in_dir=RESULTS_ROOT / crop / fer
+    tif_dir=RESULTS_ROOT / crop / fer
     #Define color
     type_colors = [{-1: "#00CD6C", 0: "#AF58BA", 1: "#FFC61E"},
                    {-2: "red", -1: "mistyrose", 0: "lightgrey", 1: "cyan", 2: "green"}] #blue, red, green, maturity type 
     change_colors = {-2: "red", -1: "mistyrose", 0: "lightgrey", 1: "cyan", 2: "blue"} #change
     #African country bounday
-    africa=gpd.read_file(fig_dir+"CountryBoundaryLines\\ne_110m_admin_0_countries.shp")
+    africa=gpd.read_file(BOUNDARY_FILE)
     africa=africa[africa['CONTINENT']=='Africa']
     #type_colors = {-1: "#E9002D", 0: "#FFAA00", 1: "#00B000"}  #Red Amber Green
     tif_type=['dis','change']
@@ -176,13 +185,13 @@ def MainText_Plot_3(crop,fer,G1):
                ['To short*','To short','No change','To long','To long*']]
     pie_radius=[0.9,0.9]
     #grid include maize area
-    grid=pd.read_csv("D:\\works\\AfricaMzSg\\input\\African5minGrid_SIMUNIT.csv")[['POINT_X','POINT_Y','A']]
+    grid=pd.read_csv(INPUT_DIR / "African5minGrid_SIMUNIT.csv")[['POINT_X','POINT_Y','A']]
     grid.columns=['x','y','A']
     fig, axs = plt.subplots(2,2,figsize=(16.8,16))
     #axs.axis("off") 
     for i,j in list(itertools.product(range(2),range(2))):  #i=season, j=dist or change
-        tif=tif_dir+"mz_se"+str(i+1)+"_"+fer+"_"+tif_type[j]+G1+".tiff"  #tif file for plotting
-        df=pd.read_csv(in_dir+"mz_se"+str(i+1)+"_"+fer+"_"+tif_type[j]+G1+".csv") #data file for computer area sharing
+        tif=tif_dir / f"mz_se{i+1}_{fer}_{tif_type[j]}{G1}.tiff"  #tif file for plotting
+        df=pd.read_csv(in_dir / f"mz_se{i+1}_{fer}_{tif_type[j]}{G1}.csv") #data file for computer area sharing
         df=df.merge(grid).dropna()[['value','A']] #only leave value and Area columns
         with rasterio.open(tif) as src:
             tif = src.read(1)  # 读取第一个波段数据
@@ -262,15 +271,16 @@ def MainText_Plot_3(crop,fer,G1):
     for i in range(4):axs[i//2,i%2].text(-28,41,chr(97+i),fontsize=26)
     plt.subplots_adjust(wspace=0.03,hspace=0.16)      
     fig.tight_layout()
-    fig.savefig(fig_dir + "MainText_Fig_3.png", format="png", dpi=300)
+    fig.savefig(PLOTS_DIR / "MainText_Fig_3.png", format="png", dpi=300)
+    fig.savefig(PLOTS_DIR / "MainText_Fig_3.pdf", format="pdf", dpi=300)
 
 #############Plot3#####################
-fig_dir="E:/RSG Dropbox/Wei Xiong/Works/CurrentProcessing/0_AfricanMaizeSorghum/NF_NATFOOD-20501074/R1/Plots/"
-crop="mz"
-G1="_GT1"
-fer="wfer_gridcalibratedWaHi"
-#Run Rscript 4paper_ComputeSIMUNIT_BestVarOptimSow.R segmentation(infile,crop,1971,2021)
-varDis2tif(crop,fer,G1)
-EstimateTemporalChange(crop,fer,G1)
-temporalChange2tif(crop,fer,G1)
-MainText_Plot_3(crop,fer,G1)
+if __name__ == "__main__":
+    crop = "mz"
+    G1 = "_GT1"
+    fer = "wfer_gridcalibratedWaHi"
+    # Run Rscript 4paper_ComputeSIMUNIT_BestVarOptimSow.R segmentation(infile,crop,1971,2021) before this pipeline.
+    #varDis2tif(crop, fer, G1)
+    #EstimateTemporalChange(crop, fer, G1)
+    #temporalChange2tif(crop, fer, G1)
+    MainText_Plot_3(crop, fer, G1)

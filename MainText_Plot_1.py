@@ -6,7 +6,14 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
+from pathlib import Path
 #%matplotlib inline
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+PLOTS_DIR = SCRIPT_DIR.parent / "Plots"
+
+INPUT_DIR = Path(r"D:\Works\AfricaMzSg\input")
+OUTPUT_DIR = Path(r"D:\Works\AfricaMzSg\output")
 
 ##########################################################FOR MAIN TEXT FIGURE 1#######################################
 def yld2prodInAtable(fer):
@@ -15,11 +22,11 @@ def yld2prodInAtable(fer):
     :param fer:
     :return: result
     """
-    in_dir = "D:\\works\\AfricaMzSg\\input\\"
+    in_dir = INPUT_DIR
     # sea 1=primary 2=minor 3=total/combined
     result = pd.DataFrame(columns=['sowtype', 'type', 'cul', 'sea'] + [x for x in range(1971, 2022)])
     ###FAO Reported yield and production, computed from detrended yield, production = detrend yield  x max(area in 1971-2021)
-    df = pd.read_csv(in_dir + "FAOSTAT_African_Countries_data_en_1-21-2025.csv")
+    df = pd.read_csv(in_dir / "FAOSTAT_African_Countries_data_en_1-21-2025.csv")
     #Real FAO production of past 10 years, 2014-2023##################
     temp = df.loc[(df['Area'] == 'Africa') & (df['Year'] > 2018) & (df['Element'] == 'Production'), 'Value'].tolist()
     result.loc[len(result),] = ['fao', 'prod', 'real', '2019-2023'] + [np.nan] * (51 - len(temp)) + [x / 1000000 for x
@@ -37,10 +44,10 @@ def yld2prodInAtable(fer):
     ####################################SIMULATED YIELD#########################################################
     # Resport sowing month and area for the primary and minor maize
     # reported sowing month
-    sow = pd.read_csv(in_dir + "Africa_SimGrid_Confirmed_5min_4calibration.csv")[
+    sow = pd.read_csv(in_dir / "Africa_SimGrid_Confirmed_5min_4calibration.csv")[
         ['SIMUNIT', 'ReportedSow_se1m', 'ReportedSow_se2m', 'A']]
     sow.columns = ['SIMUNIT', 'se1m', 'se2m', 'A']
-    area = pd.read_csv(in_dir + "Africa_SIMUNIT_MZ_PhysicalArea.csv")
+    area = pd.read_csv(in_dir / "Africa_SIMUNIT_MZ_PhysicalArea.csv")
     area = area.merge(sow[['SIMUNIT', 'A']], how='outer').fillna(0)
     area['se1a'] = area['PhysicalArea']  # Area of the primary maize is set to the physical area of maize in around 2020 (SPAM)
     area['se2a'] = area['A'] - area['PhysicalArea']  # Actual area of second maize is not know, setting to Physical-Harvest>0
@@ -49,9 +56,9 @@ def yld2prodInAtable(fer):
     area = area[['SIMUNIT', 'se1a', 'se2a']]
     #######################################SIMULATED VALUE# WITHOUT FERTILIZER#################################
     sowing_window = ['ReportedSow', 'FixedSow', 'OptimumFixedSow', 'OptimumYearSow']
-    in_dir = "D:/works/AfricaMzSg/output/"
+    in_dir = OUTPUT_DIR
     for sw in sowing_window:
-        df = pd.read_csv(in_dir + "mz_yield_" + sw + "_" + fer + ".txt", sep=r'\s+')  # change here for fertilizer
+        df = pd.read_csv(in_dir / f"EPIC_mz_yield_{sw}_{fer}.txt", sep=r'\s+')  # change here for fertilizer
         for cul in [1, 2, 3]:
             # seson 1
             temp = df[(df['matu'] == cul) & (df['sea'] == 1)].fillna(0)
@@ -152,10 +159,10 @@ def MainText_Plot_1(fer):
     )
     axes[1].text(1.5, 170, "Productions estimated from simulations\n with varied variety maturity", fontsize=10)
     plt.subplots_adjust(left=0.06, bottom=0.22, top=0.88, right=0.99)
-    fig.savefig(fig_dir + "MainText_Fig_1.png", format="png", dpi=300)
+    fig.savefig(PLOTS_DIR / "MainText_Fig_1.png", format="png", dpi=300)
+    fig.savefig(PLOTS_DIR / "MainText_Fig_1.pdf", format="pdf", dpi=300)
 
 
-#Main function
-fig_dir="E:/RSG Dropbox/Wei Xiong/Works/CurrentProcessing/0_AfricanMaizeSorghum/NF_NATFOOD-20501074/R1/Plots/"
-fer="wfer_gridcalibratedWaHi"
-MainText_Plot_1(fer)  #Plot1 in Main Text:
+if __name__ == "__main__":
+    fer = "wfer_gridcalibratedWaHi"
+    MainText_Plot_1(fer)  # Plot 1 in Main Text.

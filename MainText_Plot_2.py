@@ -6,17 +6,24 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
+from pathlib import Path
 #%matplotlib inline
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+PLOTS_DIR = SCRIPT_DIR.parent / "Plots"
+INPUT_DIR = Path(r"D:\Works\AfricaMzSg\input")  #SCRIPT_DIR.parent / "data"
+OUTPUT_DIR = Path(r"D:\Works\AfricaMzSg\output") #SCRIPT_DIR.parent / "output"
+
 ##########################################################FOR MAIN TEXT FIGURE 2#######################################
 def AggregatedYld(fer):
-    in_dir="D:/works/AfricaMzSg/output/"
+    in_dir = OUTPUT_DIR
     sw=["ReportedSow","OptimumFixedSow"]
     #Maize physical area
-    area=pd.read_csv("D:/works/AfricaMzSg/Input/Africa_SimGrid_Confirmed_5min_4calibration.csv")[['SIMUNIT','ReportedSow_se1m','ReportedSow_se2m','A']]
+    area=pd.read_csv(INPUT_DIR / "Africa_SimGrid_Confirmed_5min_4calibration.csv")[['SIMUNIT','ReportedSow_se1m','ReportedSow_se2m','A']]
     area.columns=['SIMUNIT','se1m','se2m','A']
     yld=pd.DataFrame(columns=['sowtype','matu','sea','GT1']+[str(yr) for yr in range(1971,2022)])
     for sow in sw:
-        df0=pd.read_csv(in_dir+"EPIC_mz_yield_"+sow+"_"+fer+".txt",sep=r'\s+')  #Change here when you want to use wofer yield
+        df0=pd.read_csv(in_dir / f"EPIC_mz_yield_{sow}_{fer}.txt",sep=r'\s+')  #Change here when you want to use wofer yield
         for cul in [1,2,3]: #three varieties
             for sea in [1,2]: #two seasons only the first season because the sowing month identifed by peaks is not feasible
                 df=df0[(df0['matu']==cul)&(df0['sea']==sea)].fillna(0).reset_index()
@@ -56,8 +63,8 @@ def MainText_Plot_2(fer,season):
         ax1.barh(y_p[i],value,height=width,color=color)
         #axes[0].text(value-value/1.5,y_p[i]-0.1,label[i])
     ax1.set_yticks([0,1,2,3,4,5],['Late','Medium','Early','Late','Medium','Early'])
-    ax1.set_ylabel('Optimum Sow            Reported Sow',fontsize=15)
-    ax1.set_xlabel('Suitability Index (SI)',fontsize=15)
+    ax1.set_ylabel('Optimum Sow            Reported Sow',fontsize=14)
+    ax1.set_xlabel('Suitability Index (SI)',fontsize=14)
     #For decades
     ax2=fig.add_subplot(gs[0,1:3])
     sow=0
@@ -79,7 +86,7 @@ def MainText_Plot_2(fer,season):
         ax2.plot(x, p(x), "-", color=type_colors[1][cul])
         ax2.set_xticks([1976,1986,1996,2006,2016])
         ax2.set_xticklabels([])
-        ax2.set_ylabel("SI",fontsize=15,labelpad=10)
+        ax2.set_ylabel("SI (t/ha)",fontsize=14,labelpad=10)
     ax3=fig.add_subplot(gs[1,1:3])
     sow=1
     for cul in range(3):
@@ -99,17 +106,17 @@ def MainText_Plot_2(fer,season):
         ax3.plot(x, p(x), "-", color=type_colors[sow][cul])
         ax3.set_xticks([1976,1986,1996,2006,2016])
         ax3.set_xticklabels(["1970s","1980s","1990s","2000s","2010s"])
-        ax3.set_xlabel("Decade",fontsize=15)
-        ax3.set_ylabel("SI",fontsize=15)
+        ax3.set_xlabel("Decade",fontsize=14)
+        ax3.set_ylabel("SI (t/ha)",fontsize=14)
         ax3.tick_params(axis='both', which='major')
     ax2.legend(bbox_to_anchor=(1.2, 1.03), loc='upper right',fontsize=10)
     plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.30, hspace=0.15)
     ax1.text(-0.6,5.8,'a',fontsize=20)
     ax2.text(1968,ax2.get_ylim()[1]+(ax2.get_ylim()[1]-ax2.get_ylim()[0])/20,'b',fontsize=20)
     ax3.text(1968,ax3.get_ylim()[1]+(ax3.get_ylim()[1]-ax3.get_ylim()[0])/20,'c',fontsize=20)
-    fig.savefig(fig_dir+"\\MainText_Fig_2.png",format="png",dpi=300, bbox_inches='tight', pad_inches=0)
+    fig.savefig(PLOTS_DIR / "MainText_Fig_2.png",format="png",dpi=300, bbox_inches='tight', pad_inches=0)
+    fig.savefig(PLOTS_DIR / "MainText_Fig_2.pdf",format="pdf",dpi=300, bbox_inches='tight', pad_inches=0)
 
-#Main function
-fig_dir="E:/RSG Dropbox/Wei Xiong/Works/CurrentProcessing/0_AfricanMaizeSorghum/NF_NATFOOD-20501074/R1/Plots/"
-fer="wfer_gridcalibratedWaHi"
-MainText_Plot_2(fer,season=1) #Plot2 in Main Text= #season=1
+if __name__ == "__main__":
+    fer = "wfer_gridcalibratedWaHi"
+    MainText_Plot_2(fer, season=1)  # Plot 2 in Main Text.
